@@ -1,0 +1,11 @@
+main.c:177:1:__io_putchar	0	static
+main.c:185:5:_write	0	static
+main.c:278:6:SystemClock_Config	72	static
+main.c:586:7:CalcTemp	8	static
+main.c:596:9:CalcMTHChecksum	0	static
+main.c:608:6:CalcHTMChecksum	0	static
+main.c:628:10:PackHTMData	32	static
+main.c:206:5:main	112	static
+main.c:666:10:UnpackMTHData	20	static
+main.c:736:6:HAL_TIM_PeriodElapsedCallback	0	static
+main.c:753:6:Error_Handler	0	static

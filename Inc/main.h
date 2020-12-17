@@ -68,6 +68,8 @@ void Error_Handler(void);
 #define z_GPIO_Port GPIOA
 #define UART1_SYNC_Pin GPIO_PIN_5
 #define UART1_SYNC_GPIO_Port GPIOA
+#define pclk_Pin GPIO_PIN_10
+#define pclk_GPIO_Port GPIOB
 #define LED1_Pin GPIO_PIN_12
 #define LED1_GPIO_Port GPIOB
 #define LED2_Pin GPIO_PIN_13

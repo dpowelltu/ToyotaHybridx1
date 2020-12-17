@@ -42,6 +42,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
 CAN_HandleTypeDef hcan;
 
 SPI_HandleTypeDef hspi1;
@@ -68,9 +70,10 @@ static void MX_TIM3_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
-uint8_t htm_data[80];
-uint8_t mth_data[100]={};
+//uint8_t htm_data[80];
+uint8_t mth_data[200]={};
 uint8_t dma_complete;
 
 //80 bytes out and 100 bytes back in (with offset of 8 bytes.
@@ -83,6 +86,8 @@ void CalcHTMChecksum(void);
 float CalcTemp(uint32_t raw);
 uint16_t PackHTMData(uint8_t *, uint8_t *, uint16_t );
 uint16_t UnpackMTHData(uint8_t *, uint8_t *, uint16_t, uint16_t );
+
+#define MG2MAXSPEED 10000
 
 
 #if __GNUC__
@@ -112,6 +117,18 @@ union{
 }tx_buff;
 uint8_t uart1_rx_buffer[200], rx_buffer_count;
 
+enum{
+	PARK,
+	REVERSE,
+	NEUTRAL,
+	DRIVE
+};
+
+uint8_t get_gear();
+
+uint16_t get_torque(uint8_t gear);
+
+long map(long x, long in_min, long in_max, long out_min, long out_max);
 
 #if 0
 uint8_t buffer[10]={0x55,0x55};
@@ -210,7 +227,11 @@ int _write(int file, char *ptr, int len)
 uint8_t txDat[256]={0};
 uint8_t rxDat[256]={0};
 
-
+static uint16_t htm_checksum;
+static int16_t dc_bus_voltage,temp_inv_water, temp_inv_inductor, mg1_speed, mg2_speed;
+static int16_t mg1_torque, mg2_torque, speedSum;
+static uint8_t gear;
+static uint8_t inv_status = 1;
 
 
 /* USER CODE END 0 */
@@ -251,6 +272,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_SPI1_Init();
   MX_TIM2_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
  // HAL_ADC_Start_DMA(&hadc1, adc_vals, 3);
@@ -274,7 +296,7 @@ int main(void)
  // HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin,1);
  // HAL_Delay(500);
 
-#if 1
+#if 0
 
   __HAL_TIM_ENABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
@@ -297,7 +319,7 @@ int main(void)
 
 	  HAL_UART_Transmit_IT(&huart2, htm_data_setup, 80);
 
-	  HAL_Delay(4);
+	  HAL_Delay(5);
 
 	  if(CalcMTHChecksum()==0){
 	  	  	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 1 );
@@ -317,6 +339,105 @@ int main(void)
 		  counter++;
 	  }
   }
+#else
+
+
+
+  HAL_ADC_Start(&hadc1);
+
+  __HAL_TIM_ENABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_3);
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+
+  HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin,1);
+  HAL_Delay(200);
+
+  uint16_t delay_val=500;
+  uint16_t buff[200];
+
+  for(int i =0 ; i< 200; i++)
+	  buff[i]=0x00;
+
+
+
+
+  while(1){
+	  serial1_in_buff_count=0;
+	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
+	  HAL_Delay(1);
+	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
+
+	  if(inv_status==0){
+		  HAL_UART_Transmit_IT(&huart2, htm_data, 80);
+	  	  }
+	  else {
+		  HAL_UART_Transmit_IT(&huart2, htm_data_setup, 80);
+		  if(mth_data[1]!=0)
+			  	 inv_status--;
+  	  	  }
+
+
+
+	  HAL_Delay(4);
+
+	  if(CalcMTHChecksum()==0){
+	  	  	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 1 );
+	  	  	}
+	  	  	else{
+	  	  	//HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 0 );
+	  	  	//exchange data and prepare next HTM frame
+	  	  	dc_bus_voltage=(((mth_data[82]|mth_data[83]<<8)-5)/2);
+	  	  	temp_inv_water=(mth_data[42]|mth_data[43]<<8);
+	  	  	temp_inv_inductor=(mth_data[86]|mth_data[87]<<8);
+	  	  	mg1_speed=mth_data[6]|mth_data[7]<<8;
+	  	  	mg2_speed=mth_data[31]|mth_data[32]<<8;
+
+	  	  	}
+
+	    gear=get_gear();
+	    mg2_torque=get_torque(gear); // -3500 (reverse) to 3500 (forward)
+	    mg1_torque=((mg2_torque*5)/4);
+	    if((mg2_speed>MG2MAXSPEED)||(mg2_speed<-MG2MAXSPEED))mg2_torque=0;
+	    if(gear==REVERSE)mg1_torque=0;
+
+	    //speed feedback
+	    speedSum=mg2_speed+mg1_speed;
+	    speedSum/=113;
+	    htm_data[0]=(uint8_t)speedSum;
+	    htm_data[75]=(mg1_torque*4)&0xFF;
+	    htm_data[76]=((mg1_torque*4)>>8);
+
+	    //mg1
+	    htm_data[5]=(mg1_torque*-1)&0xFF;  //negative is forward
+	    htm_data[6]=((mg1_torque*-1)>>8);
+	    htm_data[11]=htm_data[5];
+	    htm_data[12]=htm_data[6];
+
+	    //mg2
+	    htm_data[26]=(mg2_torque)&0xFF; //positive is forward
+	    htm_data[27]=((mg2_torque)>>8);
+	    htm_data[32]=htm_data[26];
+	    htm_data[33]=htm_data[27];
+
+	    //checksum
+	    htm_checksum=0;
+	    for(int i=0;i<78;i++)htm_checksum+=htm_data[i];
+	    htm_data[78]=htm_checksum&0xFF;
+	    htm_data[79]=htm_checksum>>8;
+
+
+	  mth_data[98]=0;
+	  mth_data[99]=0;
+
+	  //HAL_Delay(delay_val++);
+	  if(counter>100){
+		  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin );
+		  counter = 0;
+	  }
+	  else{
+		  counter++;
+	  }
+  }
+
 
 #endif
 
@@ -467,6 +588,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the CPU, AHB and APB busses clocks 
   */
@@ -493,6 +615,57 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV8;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+  /** Common config 
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure Regular Channel 
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -988,11 +1161,32 @@ uint16_t UnpackMTHData(uint8_t *data_in, uint8_t *data_out, uint16_t len, uint16
 }
 
 
+uint8_t get_gear()
+{
+  if(HAL_GPIO_ReadPin(FWD_IN_GPIO_Port, FWD_IN_Pin))
+  {
+  return(DRIVE);
+  }
+  else
+  {
+  return(REVERSE);
+  }
+}
 
+uint16_t get_torque(uint8_t gear)
+{
+  //accelerator pedal mapping to torque values here
+  uint16_t ThrotVal=HAL_ADC_GetValue(&hadc1);
+  if (ThrotVal<80) ThrotVal=75;//dead zone at start of throttle travel
+ if(gear==DRIVE) ThrotVal = map(ThrotVal, 75, 4096, 0, 1000);
+ if(gear==REVERSE) ThrotVal = map(ThrotVal, 75, 4096, 0, -1000);
+  return ThrotVal; //return torque
+}
 
-
-
-
+long map(long x, long in_min, long in_max, long out_min, long out_max)
+{
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 
 

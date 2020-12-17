@@ -68,18 +68,22 @@ void Error_Handler(void);
 #define z_GPIO_Port GPIOA
 #define UART1_SYNC_Pin GPIO_PIN_5
 #define UART1_SYNC_GPIO_Port GPIOA
-#define RED_LED_Pin GPIO_PIN_13
-#define RED_LED_GPIO_Port GPIOB
-#define HTM_SYNC_Pin GPIO_PIN_14
+#define LED1_Pin GPIO_PIN_12
+#define LED1_GPIO_Port GPIOB
+#define LED2_Pin GPIO_PIN_13
+#define LED2_GPIO_Port GPIOB
+#define LED3_Pin GPIO_PIN_14
+#define LED3_GPIO_Port GPIOB
+#define LED4_Pin GPIO_PIN_15
+#define LED4_GPIO_Port GPIOB
+#define HTM_SYNC_Pin GPIO_PIN_6
 #define HTM_SYNC_GPIO_Port GPIOB
-#define START_IN_Pin GPIO_PIN_6
-#define START_IN_GPIO_Port GPIOB
 #define FWD_IN_Pin GPIO_PIN_7
 #define FWD_IN_GPIO_Port GPIOB
 #define REV_IN_Pin GPIO_PIN_8
 #define REV_IN_GPIO_Port GPIOB
-#define BRAKE_IN_Pin GPIO_PIN_9
-#define BRAKE_IN_GPIO_Port GPIOB
+#define START_IN_Pin GPIO_PIN_9
+#define START_IN_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

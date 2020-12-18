@@ -255,7 +255,11 @@ int main(void)
   HAL_Delay(200);
 
 
-
+  //checksum for setup data!
+  htm_checksum=0;
+  for(int i=0;i<78;i++)htm_checksum+=htm_data_setup[i];
+  htm_data_setup[78]=htm_checksum&0xFF;
+  htm_data_setup[79]=htm_checksum>>8;
 
 
   while (1)

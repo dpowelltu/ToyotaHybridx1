@@ -266,28 +266,7 @@ void USART1_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
-#if 0
-	static uint16_t byte_counter;
 
-	 uint32_t isrflags = READ_REG(husart2.Instance->SR);
-	  uint32_t cr1its   = READ_REG(husart2.Instance->CR1);
-	  uint32_t cr3its   = READ_REG(husart2.Instance->CR3);
-
-	 if (((isrflags & USART_SR_TC) != RESET) && ((cr1its & USART_CR1_TCIE) != RESET))
-	    {
-
-		husart2.Instance->DR=0xff;
-
-		byte_counter++;
-				if(byte_counter>10){
-					byte_counter = 0;
-					HAL_GPIO_TogglePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin );
-
-				}
-		//USART_ClearITPendingBit(USART2, USART_IT_TXE);
-	}
-
-#endif
 	 HAL_UART_IRQHandler(&huart2);
 
   /* USER CODE END USART2_IRQn 0 */

@@ -102,20 +102,10 @@ uint16_t UnpackMTHData(uint8_t *, uint8_t *, uint16_t, uint16_t );
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint32_t adc_vals[3];
-uint16_t counter;
 
-typedef struct{
-		uint8_t data:1;
-	}bits_t;
-
-union{
-	bits_t bits[2048];
-	uint8_t bytes[256];
-	uint16_t words[128];
-
-}tx_buff;
-uint8_t uart1_rx_buffer[200], rx_buffer_count;
+uint16_t counter, rx_buffer_count;
+;
+uint8_t uart1_rx_buffer[10], uart2_rx_buffer[10];
 
 enum{
 	PARK,
@@ -124,81 +114,39 @@ enum{
 	DRIVE
 };
 
-uint8_t get_gear();
+void get_gear();
 
 uint16_t get_torque(uint8_t gear);
 
 long map(long x, long in_min, long in_max, long out_min, long out_max);
 
-#if 0
-uint8_t buffer[10]={0x55,0x55};
-
-uint32_t byte_counter;
-
-void HAL_USART_TxCpltCallback(USART_HandleTypeDef *husart)
-{
-	uint32_t tmp;
-
-
-  /* Prevent unused argument(s) compilation warning */
-	if ( husart->Instance == USART2 ){
-		/* if its UART 2, shoot out the next byte! */
-
-		//tmp = 0x30;
-		//husart->Instance->DR = (tmp & (uint16_t)0x01FF);
-		__HAL_USART_ENABLE_IT(&husart2, UART_IT_TC);
-		HAL_USART_Transmit(husart, (uint8_t*)buffer, 1, 1000);
-
-
-		//Toggle PIN
-		byte_counter++;
-		if(byte_counter>10){
-			byte_counter = 0;
-			HAL_GPIO_TogglePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin );
-
-		}
-		//HAL_UART_Transmit(&huart2, (uint8_t*)buffer, 1, 1000);
-
-	}
-
-}
-
-#endif
 
 
 
-#if 1
+
+
 #define MAX_COMMAND_SIZE 200
 
 
 
-
-
-uint8_t serial1_in_buff[MAX_COMMAND_SIZE];
-uint8_t serial1_in_buff_count = 0;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
 
 	 if ( huart->Instance == USART2 ){
 
-			if(serial1_in_buff_count<MAX_COMMAND_SIZE){
+			if(rx_buffer_count<MAX_COMMAND_SIZE){
 
-				mth_data[serial1_in_buff_count]=uart1_rx_buffer[0];
-				serial1_in_buff_count++;
+				mth_data[rx_buffer_count]=uart2_rx_buffer[0];
+				rx_buffer_count++;
 			}
-			else{
-				//Process frame
 
 
-
-				}
-
-			HAL_UART_Receive_IT(&huart2,uart1_rx_buffer,1);
+			HAL_UART_Receive_IT(&huart2,uart2_rx_buffer,1);
 
 	 }
 
 }
-#endif
+
 
 /**
   * @brief  Retargets the C library printf function to the USART.
@@ -278,9 +226,7 @@ int main(void)
  // HAL_ADC_Start_DMA(&hadc1, adc_vals, 3);
  // HAL_UART_Receive_IT(&husart1,uart1_rx_buffer,1);
 
-  HAL_UART_Receive_IT(&huart2,uart1_rx_buffer,1);
-  //__HAL_USART_ENABLE_IT(&husart2, UART_IT_TC);
-
+  HAL_UART_Receive_IT(&huart2,uart2_rx_buffer,1);
 
 
 
@@ -296,50 +242,7 @@ int main(void)
  // HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin,1);
  // HAL_Delay(500);
 
-#if 0
 
-  __HAL_TIM_ENABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_3);
-    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
-
-  HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin,1);
-  HAL_Delay(200);
-
-  uint16_t delay_val=500;
-  uint16_t buff[200];
-
-  for(int i =0 ; i< 200; i++)
-	  buff[i]=0x00;
-
-  while(1){
-	  serial1_in_buff_count=0;
-	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
-	  HAL_Delay(1);
-	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
-
-
-	  HAL_UART_Transmit_IT(&huart2, htm_data_setup, 80);
-
-	  HAL_Delay(5);
-
-	  if(CalcMTHChecksum()==0){
-	  	  	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 1 );
-	  	  	}
-	  	  	else{
-	  	  	//HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 0 );
-	  	  	}
-	  mth_data[98]=0;
-	  mth_data[99]=0;
-
-	  //HAL_Delay(delay_val++);
-	  if(counter>100){
-		  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin );
-		  counter = 0;
-	  }
-	  else{
-		  counter++;
-	  }
-  }
-#else
 
 
 
@@ -348,81 +251,80 @@ int main(void)
   __HAL_TIM_ENABLE_OCxPRELOAD(&htim2, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
 
-  HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin,1);
+  HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin,1);
   HAL_Delay(200);
 
-  uint16_t delay_val=500;
-  uint16_t buff[200];
-
-  for(int i =0 ; i< 200; i++)
-	  buff[i]=0x00;
 
 
 
 
-  while(1){
-	  serial1_in_buff_count=0;
-	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+	  rx_buffer_count=0;
+	  HAL_GPIO_TogglePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin);
 	  HAL_Delay(1);
-	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
+	  HAL_GPIO_TogglePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin);
 
 	  if(inv_status==0){
 		  HAL_UART_Transmit_IT(&huart2, htm_data, 80);
-	  	  }
+		  }
 	  else {
 		  HAL_UART_Transmit_IT(&huart2, htm_data_setup, 80);
 		  if(mth_data[1]!=0)
-			  	 inv_status--;
-  	  	  }
+				 inv_status--;
+		  }
 
 
 
 	  HAL_Delay(4);
 
 	  if(CalcMTHChecksum()==0){
-	  	  	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 1 );
-	  	  	}
-	  	  	else{
-	  	  	//HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 0 );
-	  	  	//exchange data and prepare next HTM frame
-	  	  	dc_bus_voltage=(((mth_data[82]|mth_data[83]<<8)-5)/2);
-	  	  	temp_inv_water=(mth_data[42]|mth_data[43]<<8);
-	  	  	temp_inv_inductor=(mth_data[86]|mth_data[87]<<8);
-	  	  	mg1_speed=mth_data[6]|mth_data[7]<<8;
-	  	  	mg2_speed=mth_data[31]|mth_data[32]<<8;
+			HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 1 );
+			}
+			else{
+			//HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 0 );
+			//exchange data and prepare next HTM frame
+			dc_bus_voltage=(((mth_data[82]|mth_data[83]<<8)-5)/2);
+			temp_inv_water=(mth_data[42]|mth_data[43]<<8);
+			temp_inv_inductor=(mth_data[86]|mth_data[87]<<8);
+			mg1_speed=mth_data[6]|mth_data[7]<<8;
+			mg2_speed=mth_data[31]|mth_data[32]<<8;
 
-	  	  	}
+			}
 
-	    gear=get_gear();
-	    mg2_torque=get_torque(gear); // -3500 (reverse) to 3500 (forward)
-	    mg1_torque=((mg2_torque*5)/4);
-	    if((mg2_speed>MG2MAXSPEED)||(mg2_speed<-MG2MAXSPEED))mg2_torque=0;
-	    if(gear==REVERSE)mg1_torque=0;
+		get_gear();
+		mg2_torque=get_torque(gear); // -3500 (reverse) to 3500 (forward)
+		mg1_torque=((mg2_torque*5)/4);
+		if((mg2_speed>MG2MAXSPEED)||(mg2_speed<-MG2MAXSPEED))mg2_torque=0;
+		if(gear==REVERSE)mg1_torque=0;
 
-	    //speed feedback
-	    speedSum=mg2_speed+mg1_speed;
-	    speedSum/=113;
-	    htm_data[0]=(uint8_t)speedSum;
-	    htm_data[75]=(mg1_torque*4)&0xFF;
-	    htm_data[76]=((mg1_torque*4)>>8);
+		//speed feedback
+		speedSum=mg2_speed+mg1_speed;
+		speedSum/=113;
+		htm_data[0]=(uint8_t)speedSum;
+		htm_data[75]=(mg1_torque*4)&0xFF;
+		htm_data[76]=((mg1_torque*4)>>8);
 
-	    //mg1
-	    htm_data[5]=(mg1_torque*-1)&0xFF;  //negative is forward
-	    htm_data[6]=((mg1_torque*-1)>>8);
-	    htm_data[11]=htm_data[5];
-	    htm_data[12]=htm_data[6];
+		//mg1
+		htm_data[5]=(mg1_torque*-1)&0xFF;  //negative is forward
+		htm_data[6]=((mg1_torque*-1)>>8);
+		htm_data[11]=htm_data[5];
+		htm_data[12]=htm_data[6];
 
-	    //mg2
-	    htm_data[26]=(mg2_torque)&0xFF; //positive is forward
-	    htm_data[27]=((mg2_torque)>>8);
-	    htm_data[32]=htm_data[26];
-	    htm_data[33]=htm_data[27];
+		//mg2
+		htm_data[26]=(mg2_torque)&0xFF; //positive is forward
+		htm_data[27]=((mg2_torque)>>8);
+		htm_data[32]=htm_data[26];
+		htm_data[33]=htm_data[27];
 
-	    //checksum
-	    htm_checksum=0;
-	    for(int i=0;i<78;i++)htm_checksum+=htm_data[i];
-	    htm_data[78]=htm_checksum&0xFF;
-	    htm_data[79]=htm_checksum>>8;
+		//checksum
+		htm_checksum=0;
+		for(int i=0;i<78;i++)htm_checksum+=htm_data[i];
+		htm_data[78]=htm_checksum&0xFF;
+		htm_data[79]=htm_checksum>>8;
 
 
 	  mth_data[98]=0;
@@ -436,144 +338,6 @@ int main(void)
 	  else{
 		  counter++;
 	  }
-  }
-
-
-#endif
-
-
-
-#if 0
-  HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin,0);
-  HAL_Delay(500);
-
-  //HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin,1);
-  //PackHTMData(htm_data_setup ,txDat,80);
-  //HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin,0);
-
-  uint8_t data[10]={1,2,4,8,16,32,64,128 };
-
-  HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin,1);
-
-  uint16_t len = PackHTMData( htm_data_setup,txDat,80);
-  HAL_SPI_TransmitReceive(&hspi1, &txDat, &rxDat, len, 50);
-  UnpackMTHData(rxDat,  mth_data, len);
-
-  HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin,1);
-
-#endif
-
-  uint8_t data[8]={0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0 };
-
-#if 0
-  HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin,1);
-  HAL_Delay(200);
-
-
-  for(int i =0 ; i < 256; i++)
-	  txDat[i]=0xff;
-
-
-  while(1){
-
-	 // HAL_SPI_TransmitReceive(&hspi1, &data, &rxDat, 8, 50);
-	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
-	  HAL_Delay(1);
-	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
-
-	  HAL_SPI_TransmitReceive(&hspi1, &txDat, &rxDat, 127, 50);
-
-	  UnpackMTHData(rxDat,  mth_data, 100, 0);
-
-
-	  	if(CalcMTHChecksum()==0){
-	  		HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 1 );
-	  	}
-	  	else{
-	  		HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 0 );
-	  	}
-
-	  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin );
-	  HAL_Delay(100);
-	  HAL_SPI_TransmitReceive(&hspi1, &data, &rxDat, 8, 50);
-	  //HAL_SPI_TransmitReceive(&hspi1, &data, &rxDat, 8, 50);
-	  MX_SPI1_Init();
-  }
-
-#endif
-
-   uint16_t len, x;
-
-   HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin,1);
-   HAL_Delay(200);
-   HAL_SPI_TransmitReceive(&hspi1, &data, &rxDat, 8, 50);
-
-   for(int i =0 ; i < 256; i++)
-   	  txDat[i]=0xff;
-
-
-  while (1)
-  {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-	  if(x<20){
-		  x++;
-	  }
-	  else{
-		  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin );
-		  x=0;
-
-		  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
-
-		  HAL_Delay(1);
-
-		  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
-		  HAL_SPI_TransmitReceive_DMA(&hspi1, txDat, rxDat,150 ) ;
-		 // HAL_Delay(1);
-
-
-
-		  //HAL_SPI_Receive_DMA(&hspi1, rxDat, 150);
-		  //HAL_SPI_Transmit_DMA(&hspi1, txDat, 150);
-
-		  dma_complete = 0;
-	  }
-	  HAL_Delay(10);
-
-	  if(dma_complete){
-
-
-		  UnpackMTHData(rxDat,  mth_data, 100, 20);
-
-			if(CalcMTHChecksum()==0){
-			  		HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 1 );
-			  	}
-			  	else{
-			  		//HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 0 );
-			  	}
-
-	  }
-
-#if 0
-	  len = PackHTMData( htm_data_setup,txDat,80);
-
-	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
-	  HAL_SPI_TransmitReceive(&hspi1, &data, &rxDat, 2, 50);
-	  HAL_GPIO_TogglePin(LED4_GPIO_Port, LED4_Pin);
-
-
-
-	  HAL_SPI_TransmitReceive(&hspi1, &txDat, &rxDat, len+50, 50);
-	  UnpackMTHData(rxDat,  mth_data, 100, 4);
-
-
-
-	 // for(int i = 0; i<1000;i++)
-	  HAL_SPI_TransmitReceive(&hspi1, &data, &rxDat, 8, 50);
-
-	  HAL_Delay(1000);
-#endif
 
 
   }
@@ -1161,16 +925,22 @@ uint16_t UnpackMTHData(uint8_t *data_in, uint8_t *data_out, uint16_t len, uint16
 }
 
 
-uint8_t get_gear()
+void get_gear()
 {
-  if(HAL_GPIO_ReadPin(FWD_IN_GPIO_Port, FWD_IN_Pin))
+  if(HAL_GPIO_ReadPin(FWD_IN_GPIO_Port, FWD_IN_Pin)==0)
   {
-  return(DRIVE);
+  gear = DRIVE;
+  HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, 1);
   }
-  else
+
+  if(HAL_GPIO_ReadPin(REV_IN_GPIO_Port, REV_IN_Pin)==0)
   {
-  return(REVERSE);
+  gear = REVERSE;
+  HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, 1);
   }
+
+
+
 }
 
 uint16_t get_torque(uint8_t gear)
@@ -1178,8 +948,10 @@ uint16_t get_torque(uint8_t gear)
   //accelerator pedal mapping to torque values here
   uint16_t ThrotVal=HAL_ADC_GetValue(&hadc1);
   if (ThrotVal<80) ThrotVal=75;//dead zone at start of throttle travel
- if(gear==DRIVE) ThrotVal = map(ThrotVal, 75, 4096, 0, 1000);
- if(gear==REVERSE) ThrotVal = map(ThrotVal, 75, 4096, 0, -1000);
+  if (ThrotVal>2000) ThrotVal=2000;
+
+ if(gear==DRIVE) ThrotVal = map(ThrotVal, 75, 2000, 0, 1000);
+ if(gear==REVERSE) ThrotVal = map(ThrotVal, 75, 2000, 0, -1000);
   return ThrotVal; //return torque
 }
 

@@ -76,12 +76,17 @@ static void MX_ADC1_Init(void);
 uint8_t mth_data[200]={};
 uint8_t dma_complete;
 
+uint8_t htm_state = 0;
+
 //80 bytes out and 100 bytes back in (with offset of 8 bytes.
 uint8_t htm_data_setup[80]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,25,0,0,0,0,0,0,0,128,0,0,0,128,0,0,0,37,1};
 uint8_t htm_data[80]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0,0,0};
 
 uint8_t CalcMTHChecksum(void);
 void CalcHTMChecksum(void);
+
+void UpdateHTMState1Ms(void);
+void UpdateHTMParams(void);
 
 float CalcTemp(uint32_t raw);
 uint16_t PackHTMData(uint8_t *, uint8_t *, uint16_t );
@@ -261,7 +266,7 @@ int main(void)
   htm_data_setup[78]=htm_checksum&0xFF;
   htm_data_setup[79]=htm_checksum>>8;
 
-
+#if 1
   while (1)
   {
     /* USER CODE END WHILE */
@@ -345,6 +350,15 @@ int main(void)
 
 
   }
+#else
+  while(1){
+	  UpdateHTMState1Ms();
+	  HAL_Delay(1);
+  	  }
+
+#endif
+
+
   /* USER CODE END 3 */
 }
 
@@ -962,6 +976,113 @@ uint16_t get_torque(uint8_t gear)
 long map(long x, long in_min, long in_max, long out_min, long out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
+
+void UpdateHTMState1Ms(void){
+
+	switch(htm_state){
+
+	case 0:
+		rx_buffer_count=0;
+		HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin, 0);
+		htm_state++;
+	break;
+
+	case 1:
+		HAL_GPIO_WritePin(HTM_SYNC_GPIO_Port, HTM_SYNC_Pin, 1);
+
+		if(inv_status==0){
+			  HAL_UART_Transmit_IT(&huart2, htm_data, 80);
+			  }
+		 else {
+			  HAL_UART_Transmit_IT(&huart2, htm_data_setup, 80);
+			  if(mth_data[1]!=0)
+					 inv_status--;
+			  }
+		htm_state++;
+	break;
+
+	case 2:
+		htm_state++;
+	break;
+
+	case 3:
+		if(CalcMTHChecksum()==0 || rx_buffer_count!=100){
+					HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 1 );
+					}
+				else{
+					//HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, 0 );
+					//exchange data and prepare next HTM frame
+					dc_bus_voltage=(((mth_data[82]|mth_data[83]<<8)-5)/2);
+					temp_inv_water=(mth_data[42]|mth_data[43]<<8);
+					temp_inv_inductor=(mth_data[86]|mth_data[87]<<8);
+					mg1_speed=mth_data[6]|mth_data[7]<<8;
+					mg2_speed=mth_data[31]|mth_data[32]<<8;
+					}
+
+		mth_data[98]=0;
+		mth_data[99]=0;
+
+		htm_state++;
+	break;
+
+	case 4:
+		 UpdateHTMParams();
+
+			 if(counter>100){
+					  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin );
+					  counter = 0;
+				  }
+				  else{
+					  counter++;
+				  }
+
+			htm_state=0;
+		break;
+
+	case 5:
+
+	break;
+
+	}
+}
+
+void UpdateHTMParams(void){
+	get_gear();
+	mg2_torque=get_torque(gear); // -3500 (reverse) to 3500 (forward)
+	mg1_torque=((mg2_torque*5)/4);
+	if((mg2_speed>MG2MAXSPEED)||(mg2_speed<-MG2MAXSPEED))mg2_torque=0;
+	if(gear==REVERSE)mg1_torque=0;
+
+	//speed feedback
+	speedSum=mg2_speed+mg1_speed;
+	speedSum/=113;
+	htm_data[0]=(uint8_t)speedSum;
+	htm_data[75]=(mg1_torque*4)&0xFF;
+	htm_data[76]=((mg1_torque*4)>>8);
+
+	//mg1
+	htm_data[5]=(mg1_torque*-1)&0xFF;  //negative is forward
+	htm_data[6]=((mg1_torque*-1)>>8);
+	htm_data[11]=htm_data[5];
+	htm_data[12]=htm_data[6];
+
+	//mg2
+	htm_data[26]=(mg2_torque)&0xFF; //positive is forward
+	htm_data[27]=((mg2_torque)>>8);
+	htm_data[32]=htm_data[26];
+	htm_data[33]=htm_data[27];
+
+	//checksum
+	htm_checksum=0;
+	for(int i=0;i<78;i++)htm_checksum+=htm_data[i];
+	htm_data[78]=htm_checksum&0xFF;
+	htm_data[79]=htm_checksum>>8;
+
+
+
 }
 
 
